@@ -1,4 +1,4 @@
-import 'package.flutter.dev/packages/flutter.dart';
+import 'package:flutter/material.dart';
 import 'package:pdf_reader/screens/home_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pdf_reader/main.dart';
+import 'package:pdf_reader/screens/pdf_reader_screen.dart';
 
 void main() {
   testWidgets('Page navigation test', (WidgetTester tester) async {
