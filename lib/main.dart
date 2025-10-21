@@ -59,6 +59,7 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
   final TextEditingController _pageInputController = TextEditingController();
   bool _isDarkMode = false;
   bool _swipeHorizontal = false; // Toggle between vertical/horizontal scrolling
+  double _zoomFactor = 1.0;
 
   @override
   void initState() {
@@ -170,6 +171,25 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
     }
   }
 
+  // Handle double-tap to zoom
+  void _handleDoubleTap() {
+    final newZoomFactor = _zoomFactor == 1.0 ? 2.0 : 1.0;
+    final currentPage = _currentPage;
+    setState(() {
+      _zoomFactor = newZoomFactor;
+      final currentFilePath = _pdfFile?.path;
+      if (currentFilePath != null) {
+        _pdfFile = null; // Set to null to force a reload
+        Future.delayed(const Duration(milliseconds: 10), () {
+          setState(() {
+            _pdfFile = File(currentFilePath);
+            _currentPage = currentPage; // Restore the current page
+          });
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -210,28 +230,32 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
           : Column(
               children: [
                 Expanded(
-                  child: PDFView(
-                    filePath: _pdfFile!.path,
-                    enableSwipe: true,
-                    swipeHorizontal: _swipeHorizontal,
-                    autoSpacing: true,
-                    pageFling: true,
-                    pageSnap: true,
-                    onRender: (pages) {
-                      setState(() {
-                        _totalPages = pages!;
-                      });
-                    },
-                    onViewCreated: (PDFViewController controller) {
-                      _pdfController = controller;
-                    },
-                    onPageChanged: (page, total) {
-                      setState(() {
-                        _currentPage = page!;
-                      });
-                    },
-                    // defaultZoomFactor: 1.0,
-                    nightMode: _isDarkMode,
+                  child: GestureDetector(
+                    onDoubleTap: _handleDoubleTap,
+                    child: PDFView(
+                      filePath: _pdfFile!.path,
+                      enableSwipe: true,
+                      swipeHorizontal: _swipeHorizontal,
+                      autoSpacing: true,
+                      pageFling: true,
+                      pageSnap: true,
+                      defaultPage: _currentPage,
+                      defaultZoomFactor: _zoomFactor,
+                      onRender: (pages) {
+                        setState(() {
+                          _totalPages = pages!;
+                        });
+                      },
+                      onViewCreated: (PDFViewController controller) {
+                        _pdfController = controller;
+                      },
+                      onPageChanged: (page, total) {
+                        setState(() {
+                          _currentPage = page!;
+                        });
+                      },
+                      nightMode: _isDarkMode,
+                    ),
                   ),
                 ),
                 Padding(
