@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf_reader/screens/pdf_reader_screen.dart';
 import 'package:pdf_reader/screens/settings_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pdf_text/pdf_text.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,57 +15,42 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<File> _recentFiles = [];
-  List<File> _allPdfs = [];
-  List<File> _filteredPdfs = [];
-  final TextEditingController _searchController = TextEditingController();
-  bool _isLoading = true;
+  Map<String, Map<String, int>> _pdfMetadata = {};
+  bool _isLoading = false;
+  late SharedPreferences _prefs;
 
   @override
   void initState() {
     super.initState();
-    _loadPdfs();
-    _searchController.addListener(_filterPdfs);
+    _initPrefs();
   }
 
-  Future<void> _loadPdfs() async {
-    setState(() {
-      _isLoading = true;
-    });
+  Future<void> _initPrefs() async {
+    _prefs = await SharedPreferences.getInstance();
+  }
+
+  Future<void> _loadPdfMetadata(File file) async {
+    int pageCount = 0;
+    int lastPage = 0;
 
     try {
-      final directory = await getExternalStorageDirectory();
-      if (directory != null) {
-        final pdfs = await _findPdfs(directory);
-        setState(() {
-          _allPdfs = pdfs;
-          _filteredPdfs = pdfs;
-        });
-      }
+      // Use a timeout to prevent long waits on large/corrupt files
+      PDFDoc doc = await PDFDoc.fromFile(file).timeout(const Duration(seconds: 5));
+      pageCount = doc.length;
+      lastPage = _prefs.getInt('last_page_${file.path.hashCode}') ?? 0;
     } catch (e) {
-      // Handle error
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      pageCount = 0;
+      lastPage = 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not read metadata for ${file.path.split('/').last}')),
+      );
     }
-  }
 
-  Future<List<File>> _findPdfs(Directory dir) async {
-    List<File> pdfs = [];
-    await for (FileSystemEntity entity in dir.list(recursive: true, followLinks: false)) {
-      if (entity is File && entity.path.endsWith('.pdf')) {
-        pdfs.add(entity);
-      }
-    }
-    return pdfs;
-  }
-
-  void _filterPdfs() {
-    final query = _searchController.text.toLowerCase();
     setState(() {
-      _filteredPdfs = _allPdfs
-          .where((pdf) => pdf.path.split('/').last.toLowerCase().contains(query))
-          .toList();
+      _pdfMetadata[file.path] = {
+        'pageCount': pageCount,
+        'lastPage': lastPage,
+      };
     });
   }
 
@@ -77,24 +63,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
+        await _loadPdfMetadata(file); // Await metadata loading
         setState(() {
-          if (!_allPdfs.any((p) => p.path == file.path)) {
-            _allPdfs.add(file);
-            _filterPdfs();
-          }
           if (!_recentFiles.any((p) => p.path == file.path)) {
             _recentFiles.insert(0, file);
-            if (_recentFiles.length > 5) {
+            if (_recentFiles.length > 10) { // Store more recent files
               _recentFiles.removeLast();
             }
           }
         });
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => PDFReaderScreen(pdfPath: file.path),
           ),
         );
+        // Refresh metadata after returning from reader
+        await _loadPdfMetadata(file);
       }
     } catch (e) {
       ScaffoldMessenger.of(
@@ -123,89 +108,54 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: const InputDecoration(
-                      labelText: 'Search PDFs',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                  ),
-                ),
                 const Padding(
-                  padding: EdgeInsets.all(8.0),
+                  padding: EdgeInsets.all(16.0),
                   child: Text("Recent Files",
                       style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                 ),
-                SizedBox(
-                  height: 120,
+                Expanded(
                   child: _recentFiles.isEmpty
                       ? const Center(child: Text("No recent files"))
                       : ListView.builder(
-                          scrollDirection: Axis.horizontal,
                           itemCount: _recentFiles.length,
                           itemBuilder: (context, index) {
                             final file = _recentFiles[index];
-                            return GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        PDFReaderScreen(pdfPath: file.path),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                width: 100,
-                                margin: const EdgeInsets.all(8),
-                                child: Column(
+                            final metadata = _pdfMetadata[file.path] ?? {'pageCount': 0, 'lastPage': 0};
+                            final pageCount = metadata['pageCount'];
+                            final lastPage = metadata['lastPage'];
+
+                            return Card(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              child: ListTile(
+                                leading: const Icon(Icons.picture_as_pdf, size: 40),
+                                title: Text(
+                                  file.path.split('/').last,
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Icon(Icons.picture_as_pdf, size: 50),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      file.path.split('/').last,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
+                                    const SizedBox(height: 4),
+                                    Text("Page count: $pageCount"),
+                                    const SizedBox(height: 2),
+                                    Text("Last opened: $lastPage"),
                                   ],
                                 ),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          PDFReaderScreen(pdfPath: file.path),
+                                    ),
+                                  );
+                                  // Refresh metadata after returning from reader
+                                  await _loadPdfMetadata(file);
+                                },
                               ),
-                            );
-                          },
-                        ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Text("All PDFs",
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-                Expanded(
-                  child: _filteredPdfs.isEmpty
-                      ? const Center(child: Text("No PDFs found."))
-                      : ListView.builder(
-                          itemCount: _filteredPdfs.length,
-                          itemBuilder: (context, index) {
-                            final file = _filteredPdfs[index];
-                            return ListTile(
-                              leading: const Icon(Icons.picture_as_pdf),
-                              title: Text(file.path.split('/').last),
-                              subtitle: Text("Path: ${file.path}"),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        PDFReaderScreen(pdfPath: file.path),
-                                  ),
-                                );
-                              },
                             );
                           },
                         ),
@@ -218,11 +168,5 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.add),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 }
