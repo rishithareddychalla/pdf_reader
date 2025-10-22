@@ -110,11 +110,11 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       pageCount = 0;
       lastOpenedDate = null;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not read metadata for ${file.path.split('/').last}')),
-        );
-      }
+      // if (mounted) {
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     SnackBar(content: Text('Could not read metadata for ${file.path.split('/').last}')),
+      //   );
+      // }
       _pdfControllers.remove(file.path)?.dispose();
     }
 

@@ -32,7 +32,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-
   Future<void> _setSwipeHorizontal(bool value) async {
     setState(() {
       _swipeHorizontal = value;
@@ -47,27 +46,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _prefs.setBool('showLastOpenedDate', value);
   }
 
-  Future<void> _setZoomFactor(double value) async {
-    setState(() {
-      _zoomFactor = value;
-    });
-    await _prefs.setDouble('zoomFactor', value);
-  }
-
   void _clearCache() {
     // In a real app, you would clear cached files here.
     // For this example, we'll just show a snackbar.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cache cleared!')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Cache cleared!')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
           SwitchListTile(
@@ -89,17 +79,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Show Last Opened Date'),
             value: _showLastOpenedDate,
             onChanged: _setShowLastOpenedDate,
-          ),
-          ListTile(
-            title: Text('Default Zoom: ${_zoomFactor.toStringAsFixed(1)}'),
-          ),
-          Slider(
-            value: _zoomFactor,
-            min: 1.0,
-            max: 5.0,
-            divisions: 40,
-            label: _zoomFactor.toStringAsFixed(1),
-            onChanged: _setZoomFactor,
           ),
           ListTile(
             title: const Text('Clear Cache'),

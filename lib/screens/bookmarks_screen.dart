@@ -32,14 +32,13 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               itemBuilder: (context, index) {
                 final page = widget.bookmarks[index];
                 return ListTile(
-                  leading: const Icon(Icons.bookmark), // Placeholder for thumbnail
+                  leading: const Icon(Icons.bookmark),
                   title: Text('Page ${page + 1}'),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete),
                     onPressed: () {
-                      setState(() {
-                        widget.onBookmarkDeleted(page);
-                      });
+                      widget.onBookmarkDeleted(page);
+                      setState(() {}); // Refresh UI after deletion
                     },
                   ),
                   onTap: () {
