@@ -19,6 +19,7 @@ class PDFReaderScreen extends StatefulWidget {
 
 class _PDFReaderScreenState extends State<PDFReaderScreen> {
   File? _pdfFile;
+  Uint8List? _pdfBytes;
   late PdfViewerController _pdfViewerController;
   int _currentPage = 0;
   int _totalPages = 0;
@@ -69,8 +70,10 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
     });
     try {
       final file = File(path);
+      final bytes = await file.readAsBytes();
       setState(() {
         _pdfFile = file;
+        _pdfBytes = bytes;
         _pdfPathKey = 'bookmarks_${_pdfFile!.path.hashCode}';
         _currentPage = 0;
         _bookmarks = [];
@@ -148,6 +151,40 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
     _pdfViewerController.zoomLevel -= 0.2;
   }
 
+  Future<void> _rotateDocument() async {
+    if (_pdfBytes == null) return;
+    final int currentPage = _pdfViewerController.pageNumber;
+    setState(() {
+      _isLoading = true;
+    });
+    final PdfDocument document = PdfDocument(inputBytes: _pdfBytes);
+    for (int i = 0; i < document.pages.count; i++) {
+      final PdfPage page = document.pages[i];
+      final PdfPageRotateAngle currentAngle = page.rotation;
+      switch (currentAngle) {
+        case PdfPageRotateAngle.rotateAngle0:
+          page.rotation = PdfPageRotateAngle.rotateAngle90;
+          break;
+        case PdfPageRotateAngle.rotateAngle90:
+          page.rotation = PdfPageRotateAngle.rotateAngle180;
+          break;
+        case PdfPageRotateAngle.rotateAngle180:
+          page.rotation = PdfPageRotateAngle.rotateAngle270;
+          break;
+        case PdfPageRotateAngle.rotateAngle270:
+          page.rotation = PdfPageRotateAngle.rotateAngle0;
+          break;
+      }
+    }
+    final List<int> bytes = await document.save();
+    document.dispose();
+    setState(() {
+      _pdfBytes = Uint8List.fromList(bytes);
+      _isLoading = false;
+      _pdfViewerController.jumpToPage(currentPage);
+    });
+  }
+
   Future<void> _sharePDF() async {
     if (_pdfFile != null) {
       await Share.shareXFiles([XFile(_pdfFile!.path)], text: 'Sharing PDF');
@@ -197,10 +234,10 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pdfView = _pdfFile == null
+    final pdfView = _pdfBytes == null
         ? const Center(child: Text("No PDF selected."))
-        : SfPdfViewer.file(
-            _pdfFile!,
+        : SfPdfViewer.memory(
+            _pdfBytes!,
             controller: _pdfViewerController,
             onPageChanged: (details) {
               setState(() {
@@ -296,10 +333,7 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
                     if (value == 'Share') {
                       _sharePDF();
                     } else if (value == 'Rotate') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Rotation is not supported.')),
-                      );
+                      _rotateDocument();
                     } else if (value == 'Metadata') {
                       _showMetadata();
                     }
