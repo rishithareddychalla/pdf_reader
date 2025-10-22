@@ -13,6 +13,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isDarkMode = false;
   bool _swipeHorizontal = false;
   double _zoomFactor = 1.0;
+  bool _showLastOpenedDate = true;
 
   @override
   void initState() {
@@ -26,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _isDarkMode = _prefs.getBool('darkMode') ?? false;
       _swipeHorizontal = _prefs.getBool('swipeHorizontal') ?? false;
       _zoomFactor = _prefs.getDouble('zoomFactor') ?? 1.0;
+      _showLastOpenedDate = _prefs.getBool('showLastOpenedDate') ?? true;
     });
   }
 
@@ -41,6 +43,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _swipeHorizontal = value;
     });
     await _prefs.setBool('swipeHorizontal', value);
+  }
+
+  Future<void> _setShowLastOpenedDate(bool value) async {
+    setState(() {
+      _showLastOpenedDate = value;
+    });
+    await _prefs.setBool('showLastOpenedDate', value);
   }
 
   Future<void> _setZoomFactor(double value) async {
@@ -75,6 +84,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Horizontal Scrolling'),
             value: _swipeHorizontal,
             onChanged: _setSwipeHorizontal,
+          ),
+          SwitchListTile(
+            title: const Text('Show Last Opened Date'),
+            value: _showLastOpenedDate,
+            onChanged: _setShowLastOpenedDate,
           ),
           ListTile(
             title: Text('Default Zoom: ${_zoomFactor.toStringAsFixed(1)}'),
