@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:pdf_reader/screens/bookmarks_screen.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -19,7 +19,7 @@ class PDFReaderScreen extends StatefulWidget {
 
 class _PDFReaderScreenState extends State<PDFReaderScreen> {
   File? _pdfFile;
-  PDFViewController? _pdfController;
+  late PdfViewerController _pdfViewerController;
   int _currentPage = 0;
   int _totalPages = 0;
   bool _isLoading = false;
@@ -27,11 +27,11 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
   late SharedPreferences _prefs;
   String _pdfPathKey = 'bookmarks_';
   bool _swipeHorizontal = false;
-  double _zoomFactor = 1.0;
 
   @override
   void initState() {
     super.initState();
+    _pdfViewerController = PdfViewerController();
     _loadPreferences();
     if (widget.pdfPath != null) {
       _loadFile(widget.pdfPath!);
@@ -71,7 +71,6 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
     _prefs = await SharedPreferences.getInstance();
     setState(() {
       _swipeHorizontal = _prefs.getBool('swipeHorizontal') ?? false;
-      _zoomFactor = _prefs.getDouble('zoomFactor') ?? 1.0;
     });
   }
 
@@ -117,15 +116,11 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
   }
 
   void _zoomIn() {
-    setState(() {
-      _zoomFactor = (_zoomFactor + 0.2).clamp(1.0, 5.0);
-    });
+    _pdfViewerController.zoomLevel += 0.2;
   }
 
   void _zoomOut() {
-    setState(() {
-      _zoomFactor = (_zoomFactor - 0.2).clamp(1.0, 5.0);
-    });
+    _pdfViewerController.zoomLevel -= 0.2;
   }
 
   Future<void> _sharePDF() async {
@@ -190,32 +185,27 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Rebuild the PDFView whenever the zoom factor changes
     final pdfView = _pdfFile == null
         ? const Center(child: Text("No PDF selected."))
-        : PDFView(
-            key: ValueKey(_zoomFactor), // Use a key to force rebuild
-            filePath: _pdfFile!.path,
-            enableSwipe: true,
-            swipeHorizontal: _swipeHorizontal,
-            autoSpacing: false,
-            pageFling: true,
-            pageSnap: true,
-            defaultPage: _currentPage,
-            // defaultZoomFactor: _zoomFactor,
-            onRender: (pages) {
+        : SfPdfViewer.file(
+            _pdfFile!,
+            controller: _pdfViewerController,
+            onPageChanged: (details) {
               setState(() {
-                _totalPages = pages!;
+                _currentPage = details.newPageNumber - 1;
+                _totalPages = _pdfViewerController.pageCount;
               });
             },
-            onViewCreated: (PDFViewController controller) {
-              _pdfController = controller;
-            },
-            onPageChanged: (page, total) {
+            onDocumentLoaded: (details) {
               setState(() {
-                _currentPage = page!;
+                _totalPages = _pdfViewerController.pageCount;
+                final lastPage = _prefs.getInt('last_opened_page_${_pdfFile!.path.hashCode}') ?? 0;
+                _pdfViewerController.jumpToPage(lastPage + 1);
               });
             },
+            scrollDirection: _swipeHorizontal
+                ? PdfScrollDirection.horizontal
+                : PdfScrollDirection.vertical,
           );
 
     return Scaffold(
@@ -249,7 +239,7 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
                   builder: (context) => BookmarksScreen(
                     bookmarks: _bookmarks,
                     onBookmarkTapped: (page) {
-                      _pdfController?.setPage(page);
+                      _pdfViewerController.jumpToPage(page + 1);
                     },
                     onBookmarkDeleted: _deleteBookmark,
                   ),
@@ -305,7 +295,7 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
                               min: 0,
                               max: (_totalPages - 1).toDouble(),
                               onChanged: (value) {
-                                _pdfController?.setPage(value.toInt());
+                                _pdfViewerController.jumpToPage(value.toInt() + 1);
                               },
                             )
                           : const SizedBox.shrink(),
