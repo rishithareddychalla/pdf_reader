@@ -5,6 +5,7 @@ import 'package:pdfx/pdfx.dart';
 import 'package:pdf_reader/screens/pdf_reader_screen.dart';
 import 'package:pdf_reader/screens/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,10 +16,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<File> _recentFiles = [];
-  Map<String, Map<String, int>> _pdfMetadata = {};
+  Map<String, Map<String, dynamic>> _pdfMetadata = {};
   final Map<String, PdfController> _pdfControllers = {};
   bool _isLoading = false;
   late SharedPreferences _prefs;
+  bool _showLastOpenedDate = true;
 
   @override
   void initState() {
@@ -36,12 +38,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _showLastOpenedDate = _prefs.getBool('showLastOpenedDate') ?? true;
+    });
     // Optionally: load any persisted recent files paths if you stored them previously.
   }
 
   Future<void> _loadPdfMetadata(File file) async {
     int pageCount = 0;
-    int lastPage = 0;
+    String? lastOpenedDate;
 
     try {
       final controller = _pdfControllers.putIfAbsent(
@@ -53,10 +58,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final doc = await controller.document;
       pageCount = doc.pagesCount;
-      lastPage = _prefs.getInt('last_page_${file.path.hashCode}') ?? 0;
+      lastOpenedDate = _prefs.getString('last_opened_date_${file.path.hashCode}');
     } catch (e) {
       pageCount = 0;
-      lastPage = 0;
+      lastOpenedDate = null;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not read metadata for ${file.path.split('/').last}')),
@@ -69,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _pdfMetadata[file.path] = {
         'pageCount': pageCount,
-        'lastPage': lastPage,
+        'lastOpenedDate': lastOpenedDate,
       };
     });
   }
@@ -165,9 +170,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           itemBuilder: (context, index) {
                             final file = _recentFiles[index];
                             final metadata = _pdfMetadata[file.path] ??
-                                {'pageCount': 0, 'lastPage': 0};
+                                {'pageCount': 0, 'lastOpenedDate': null};
                             final pageCount = metadata['pageCount'];
-                            final lastPage = metadata['lastPage'];
+                            final lastOpenedDate = metadata['lastOpenedDate'];
                             final pdfController = _pdfControllers[file.path];
 
                             return Card(
@@ -201,8 +206,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   children: [
                                     const SizedBox(height: 4),
                                     Text("Page count: $pageCount"),
-                                    const SizedBox(height: 2),
-                                    Text("Last opened: $lastPage"),
+                                    if (_showLastOpenedDate &&
+                                        lastOpenedDate != null) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                          "Last opened: ${DateFormat.yMd().add_jm().format(DateTime.parse(lastOpenedDate))}"),
+                                    ]
                                   ],
                                 ),
                                 onTap: () async {

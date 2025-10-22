@@ -51,6 +51,7 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
         _currentPage = 0;
         _bookmarks = [];
       });
+      await _saveLastOpenedDate();
       await _loadBookmarks();
     } catch (e) {
       // Handle error
@@ -58,6 +59,12 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _saveLastOpenedDate() async {
+    if (_pdfFile != null) {
+      await _prefs.setString('last_opened_date_${_pdfFile!.path.hashCode}', DateTime.now().toIso8601String());
     }
   }
 
@@ -99,15 +106,8 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
     _saveBookmarks();
   }
 
-  Future<void> _saveLastOpenedPage() async {
-    if (_pdfFile != null) {
-      await _prefs.setInt('last_page_${_pdfFile!.path.hashCode}', _currentPage);
-    }
-  }
-
   @override
   void dispose() {
-    _saveLastOpenedPage();
     super.dispose();
   }
 
@@ -231,7 +231,7 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
               final text = await _extractText();
               showSearch(
                 context: context,
-                delegate: PDFSearchDelegate(text),
+                delegate: PDFSearchDelegate(text, _isDarkMode),
               );
             },
           ),
@@ -325,8 +325,25 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
 
 class PDFSearchDelegate extends SearchDelegate {
   final String text;
+  final bool isDarkMode;
 
-  PDFSearchDelegate(this.text);
+  PDFSearchDelegate(this.text, this.isDarkMode);
+
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.copyWith(
+      brightness: isDarkMode ? Brightness.dark : Brightness.light,
+      primaryColor: isDarkMode ? Colors.grey[850] : Colors.white,
+      scaffoldBackgroundColor: isDarkMode ? Colors.grey[850] : Colors.white,
+      textTheme: theme.textTheme.copyWith(
+        titleLarge: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        hintStyle: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54),
+      ),
+    );
+  }
 
   @override
   List<Widget> buildActions(BuildContext context) {
