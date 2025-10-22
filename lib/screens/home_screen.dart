@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:pdfx/pdfx.dart';
@@ -37,12 +38,58 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  /// Initialize SharedPreferences and load recent files
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
     setState(() {
       _showLastOpenedDate = _prefs.getBool('showLastOpenedDate') ?? true;
     });
-    // Optionally: load any persisted recent files paths if you stored them previously.
+    
+    // **LOAD RECENT FILES FROM PERSISTENT STORAGE**
+    await _loadRecentFiles();
+    
+    // Load metadata for all recent files
+    for (final file in _recentFiles) {
+      await _loadPdfMetadata(file);
+    }
+  }
+
+  /// Save recent files list to SharedPreferences
+  Future<void> _saveRecentFiles() async {
+    final filePaths = _recentFiles.map((file) => file.path).toList();
+    await _prefs.setStringList('recent_files', filePaths);
+  }
+
+  /// Load recent files from SharedPreferences
+  Future<void> _loadRecentFiles() async {
+    final List<String>? savedPaths = _prefs.getStringList('recent_files');
+    if (savedPaths != null && savedPaths.isNotEmpty) {
+      setState(() {
+        _recentFiles = savedPaths
+            .map((path) => File(path))
+            .where((file) => file.existsSync()) // Only keep existing files
+            .toList();
+      });
+      
+      // Remove invalid paths from storage
+      final validPaths = _recentFiles.map((f) => f.path).toList();
+      if (validPaths.length != savedPaths.length) {
+        await _prefs.setStringList('recent_files', validPaths);
+      }
+    }
+  }
+
+  /// Update last opened date for a file
+  Future<void> _updateLastOpenedDate(String filePath) async {
+    final now = DateTime.now().toIso8601String();
+    await _prefs.setString('last_opened_date_${filePath.hashCode}', now);
+    
+    // Update metadata
+    setState(() {
+      if (_pdfMetadata.containsKey(filePath)) {
+        _pdfMetadata[filePath]!['lastOpenedDate'] = now;
+      }
+    });
   }
 
   Future<void> _loadPdfMetadata(File file) async {
@@ -94,18 +141,33 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoading = true;
         });
 
-        // load metadata (await to show info immediately)
+        // Update last opened date immediately
+        await _updateLastOpenedDate(file.path);
+
+        // load metadata
         await _loadPdfMetadata(file);
 
-        // update recent list
+        // **UPDATE RECENT LIST AND SAVE**
         setState(() {
           if (!_recentFiles.any((p) => p.path == file.path)) {
             _recentFiles.insert(0, file);
             if (_recentFiles.length > 10) {
               _recentFiles.removeLast();
             }
+          } else {
+            // Move to top if already exists
+            final existingIndex = _recentFiles.indexWhere((p) => p.path == file.path);
+            if (existingIndex > 0) {
+              setState(() {
+                final movedFile = _recentFiles.removeAt(existingIndex);
+                _recentFiles.insert(0, movedFile);
+              });
+            }
           }
         });
+
+        // **SAVE TO PERSISTENT STORAGE**
+        await _saveRecentFiles();
 
         setState(() {
           _isLoading = false;
@@ -119,8 +181,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
 
-        // refresh metadata after returning from reader
-        await _loadPdfMetadata(file);
+        // Update last opened date after reading
+        await _updateLastOpenedDate(file.path);
       }
     } catch (e) {
       if (mounted) {
@@ -218,6 +280,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ],
                                 ),
                                 onTap: () async {
+                                  // Update last opened date
+                                  await _updateLastOpenedDate(file.path);
+                                  
+                                  // Move to top of recent list
+                                  setState(() {
+                                    if (index > 0) {
+                                      final movedFile = _recentFiles.removeAt(index);
+                                      _recentFiles.insert(0, movedFile);
+                                    }
+                                  });
+                                  
+                                  // Save updated list
+                                  await _saveRecentFiles();
+
                                   await Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -225,6 +301,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           PDFReaderScreen(pdfPath: file.path),
                                     ),
                                   );
+                                  
                                   // Refresh metadata after returning from reader
                                   await _loadPdfMetadata(file);
                                 },
