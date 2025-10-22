@@ -8,7 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final Function(bool) toggleTheme;
+  const HomeScreen({super.key, required this.toggleTheme});
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -145,7 +146,9 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                MaterialPageRoute(
+                    builder: (context) =>
+                        SettingsScreen(toggleTheme: widget.toggleTheme)),
               );
             },
           ),
