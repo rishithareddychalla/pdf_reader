@@ -178,9 +178,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ? SizedBox(
                                         width: 50,
                                         height: 50,
-                                        child: PdfPageImage(
-                                          controller: pdfController,
-                                          pageNumber: 1,
+                                        child: FutureBuilder<PdfPageImage?>(
+                                          future: pdfController.document.then((doc) => doc.getPage(1).then((page) => page.render(width: 100.0, height: 100.0))),
+                                          builder: (context, snapshot) {
+                                            if (snapshot.connectionState == ConnectionState.done &&
+                                                snapshot.hasData) {
+                                              return Image.memory(snapshot.data!.bytes);
+                                            } else {
+                                              return const Icon(Icons.picture_as_pdf, size: 40);
+                                            }
+                                          },
                                         ),
                                       )
                                     : const Icon(Icons.picture_as_pdf, size: 40),
