@@ -26,7 +26,6 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
   List<int> _bookmarks = [];
   late SharedPreferences _prefs;
   String _pdfPathKey = 'bookmarks_';
-  bool _isDarkMode = false;
   bool _swipeHorizontal = false;
   double _zoomFactor = 1.0;
 
@@ -71,7 +70,6 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
   Future<void> _loadPreferences() async {
     _prefs = await SharedPreferences.getInstance();
     setState(() {
-      _isDarkMode = _prefs.getBool('darkMode') ?? false;
       _swipeHorizontal = _prefs.getBool('swipeHorizontal') ?? false;
       _zoomFactor = _prefs.getDouble('zoomFactor') ?? 1.0;
     });
@@ -218,7 +216,6 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
                 _currentPage = page!;
               });
             },
-            nightMode: _isDarkMode,
           );
 
     return Scaffold(
@@ -231,7 +228,7 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
               final text = await _extractText();
               showSearch(
                 context: context,
-                delegate: PDFSearchDelegate(text, _isDarkMode),
+                delegate: PDFSearchDelegate(text),
               );
             },
           ),
@@ -325,22 +322,15 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
 
 class PDFSearchDelegate extends SearchDelegate {
   final String text;
-  final bool isDarkMode;
 
-  PDFSearchDelegate(this.text, this.isDarkMode);
+  PDFSearchDelegate(this.text);
 
   @override
   ThemeData appBarTheme(BuildContext context) {
     final theme = Theme.of(context);
     return theme.copyWith(
-      brightness: isDarkMode ? Brightness.dark : Brightness.light,
-      primaryColor: isDarkMode ? Colors.grey[850] : Colors.white,
-      scaffoldBackgroundColor: isDarkMode ? Colors.grey[850] : Colors.white,
-      textTheme: theme.textTheme.copyWith(
-        titleLarge: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        hintStyle: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54),
+      appBarTheme: theme.appBarTheme.copyWith(
+        backgroundColor: theme.scaffoldBackgroundColor,
       ),
     );
   }
