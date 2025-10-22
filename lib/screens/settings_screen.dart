@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final Function(bool) toggleTheme;
+  const SettingsScreen({super.key, required this.toggleTheme});
 
   @override
   _SettingsScreenState createState() => _SettingsScreenState();
@@ -31,12 +32,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  Future<void> _setDarkMode(bool value) async {
-    setState(() {
-      _isDarkMode = value;
-    });
-    await _prefs.setBool('darkMode', value);
-  }
 
   Future<void> _setSwipeHorizontal(bool value) async {
     setState(() {
@@ -78,7 +73,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             title: const Text('Dark Mode'),
             value: _isDarkMode,
-            onChanged: _setDarkMode,
+            onChanged: (value) {
+              widget.toggleTheme(value);
+              setState(() {
+                _isDarkMode = value;
+              });
+            },
           ),
           SwitchListTile(
             title: const Text('Horizontal Scrolling'),
