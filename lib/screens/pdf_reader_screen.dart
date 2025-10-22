@@ -188,7 +188,7 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
             pageFling: true,
             pageSnap: true,
             defaultPage: _currentPage,
-            defaultZoomFactor: _zoomFactor,
+            // defaultZoomFactor: _zoomFactor,
             onRender: (pages) {
               setState(() {
                 _totalPages = pages!;
