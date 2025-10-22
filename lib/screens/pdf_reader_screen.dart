@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:pdf_reader/screens/bookmarks_screen.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:pdf_text/pdf_text.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'dart:typed_data';
 
 class PDFReaderScreen extends StatefulWidget {
   final String? pdfPath;
@@ -138,7 +139,8 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
   Future<void> _showMetadata() async {
     if (_pdfFile == null) return;
     try {
-      PDFDoc doc = await PDFDoc.fromFile(_pdfFile!);
+      final Uint8List bytes = await _pdfFile!.readAsBytes();
+      final PdfDocument document = PdfDocument(inputBytes: bytes);
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -146,14 +148,14 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
           content: SingleChildScrollView(
             child: ListBody(
               children: <Widget>[
-                Text('Title: ${doc.info?.title ?? 'N/A'}'),
-                Text('Author: ${doc.info?.author ?? 'N/A'}'),
-                Text('Subject: ${doc.info?.subject ?? 'N/A'}'),
-                Text('Keywords: ${doc.info?.keywords ?? 'N/A'}'),
-                Text('Creator: ${doc.info?.creator ?? 'N/A'}'),
-                Text('Producer: ${doc.info?.producer ?? 'N/A'}'),
-                Text('Creation Date: ${doc.info?.creationDate ?? 'N/A'}'),
-                Text('Modification Date: ${doc.info?.modificationDate ?? 'N/A'}'),
+                Text('Title: ${document.documentInformation.title ?? 'N/A'}'),
+                Text('Author: ${document.documentInformation.author ?? 'N/A'}'),
+                Text('Subject: ${document.documentInformation.subject ?? 'N/A'}'),
+                Text('Keywords: ${document.documentInformation.keywords ?? 'N/A'}'),
+                Text('Creator: ${document.documentInformation.creator ?? 'N/A'}'),
+                Text('Producer: ${document.documentInformation.producer ?? 'N/A'}'),
+                Text('Creation Date: ${document.documentInformation.creationDate ?? 'N/A'}'),
+                Text('Modification Date: ${document.documentInformation.modificationDate ?? 'N/A'}'),
               ],
             ),
           ),
@@ -167,10 +169,24 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
           ],
         ),
       );
+      document.dispose();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error reading metadata: $e')),
       );
+    }
+  }
+
+  Future<String> _extractText() async {
+    if (_pdfFile == null) return "";
+    try {
+      final Uint8List bytes = await _pdfFile!.readAsBytes();
+      final PdfDocument document = PdfDocument(inputBytes: bytes);
+      String text = PdfTextExtractor(document).extractText();
+      document.dispose();
+      return text;
+    } catch (e) {
+      return "Error extracting text: $e";
     }
   }
 
@@ -209,6 +225,16 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
       appBar: AppBar(
         title: Text(_pdfFile?.path.split('/').last ?? "PDF Reader"),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () async {
+              final text = await _extractText();
+              showSearch(
+                context: context,
+                delegate: PDFSearchDelegate(text),
+              );
+            },
+          ),
           IconButton(
             icon: Icon(
               _bookmarks.contains(_currentPage)
@@ -293,6 +319,74 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class PDFSearchDelegate extends SearchDelegate {
+  final String text;
+
+  PDFSearchDelegate(this.text);
+
+  @override
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.clear),
+        onPressed: () {
+          query = '';
+        },
+      ),
+    ];
+  }
+
+  @override
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () {
+        close(context, null);
+      },
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    if (query.isEmpty) {
+      return const Center(
+        child: Text("Enter a search term."),
+      );
+    }
+    final results = text.split('\n').where((line) => line.toLowerCase().contains(query.toLowerCase())).toList();
+    return ListView.builder(
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        return ListTile(
+          title: Text(results[index]),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    if (query.isEmpty) {
+      return const Center(
+        child: Text("Enter a search term."),
+      );
+    }
+    final suggestions = text.split('\n').where((line) => line.toLowerCase().contains(query.toLowerCase())).toList();
+    return ListView.builder(
+      itemCount: suggestions.length,
+      itemBuilder: (context, index) {
+        return ListTile(
+          title: Text(suggestions[index]),
+          onTap: () {
+            query = suggestions[index];
+            showResults(context);
+          },
+        );
+      },
     );
   }
 }
