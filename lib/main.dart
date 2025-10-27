@@ -86,6 +86,7 @@ class _MyAppState extends State<MyApp> {
     _prefs.setBool('darkMode', isDark);
   }
 
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
