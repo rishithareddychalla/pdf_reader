@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:pdf_reader/screens/home_screen.dart';
-import 'package:pdf_reader/screens/reader_screen.dart';
+import 'package:pdf_reader/screens/pdf_reader_screen.dart';
+
 import 'package:receive_intent/receive_intent.dart' as receive_intent;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -63,10 +64,7 @@ class _MyAppState extends State<MyApp> {
     if (path != null) {
       navigatorKey.currentState?.push(
         MaterialPageRoute(
-          builder: (context) => ReaderScreen(
-            path: path,
-            onBookmark: () {},
-            onShare: () {},
+          builder: (context) => PDFReaderScreen(
           ),
         ),
       );
