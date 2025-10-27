@@ -207,59 +207,6 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
     }
   }
 
-  Future<void> _showMetadata() async {
-    if (_pdfFile == null) return;
-    try {
-      final Uint8List bytes = await _pdfFile!.readAsBytes();
-      final PdfDocument document = PdfDocument(inputBytes: bytes);
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Metadata'),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                Text('Title: ${document.documentInformation.title ?? 'N/A'}'),
-                Text('Author: ${document.documentInformation.author ?? 'N/A'}'),
-                Text(
-                  'Subject: ${document.documentInformation.subject ?? 'N/A'}',
-                ),
-                Text(
-                  'Keywords: ${document.documentInformation.keywords ?? 'N/A'}',
-                ),
-                Text(
-                  'Creator: ${document.documentInformation.creator ?? 'N/A'}',
-                ),
-                Text(
-                  'Producer: ${document.documentInformation.producer ?? 'N/A'}',
-                ),
-                Text(
-                  'Creation Date: ${document.documentInformation.creationDate ?? 'N/A'}',
-                ),
-                Text(
-                  'Modification Date: ${document.documentInformation.modificationDate ?? 'N/A'}',
-                ),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Close'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        ),
-      );
-      document.dispose();
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error reading metadata: $e')));
-    }
-  }
-
   @override
   void dispose() {
     _pdfViewerController.dispose();
@@ -356,48 +303,126 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
                   ),
                   onPressed: _toggleBookmark,
                 ),
-                IconButton(
-                  icon: const Icon(Icons.bookmarks),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => BookmarksScreen(
-                          bookmarks: _bookmarks,
-                          onBookmarkTapped: (page) {
-                            _pdfViewerController.jumpToPage(page + 1);
-                          },
-                          onBookmarkDeleted: _deleteBookmark,
-                        ),
-                      ),
-                    );
-                  },
-                ),
                 PopupMenuButton<String>(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  elevation: 8,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF2C2C2C) // dark background
+                      : const Color(0xFFF9F9F9), // light background
+                  offset: const Offset(0, 50),
                   onSelected: (value) {
                     if (value == 'Share') {
                       _sharePDF();
                     } else if (value == 'Rotate') {
                       _rotateDocument();
-                    } else if (value == 'Metadata') {
-                      _showMetadata();
+                    } else if (value == 'Bookmarks') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => BookmarksScreen(
+                            bookmarks: _bookmarks,
+                            onBookmarkTapped: (page) {
+                              _pdfViewerController.jumpToPage(page + 1);
+                            },
+                            onBookmarkDeleted: _deleteBookmark,
+                          ),
+                        ),
+                      );
                     }
                   },
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                        const PopupMenuItem<String>(
-                          value: 'Share',
-                          child: Text('Share'),
+                  icon: Icon(
+                    Icons.more_vert,
+                    size: 26,
+                    // color: Theme.of(context).iconTheme.color,
+                  ),
+                  itemBuilder: (BuildContext context) {
+                    final isDark =
+                        Theme.of(context).brightness == Brightness.dark;
+                    final textColor = isDark ? Colors.white : Colors.black87;
+                    final secondaryColor = isDark
+                        ? Colors.grey[400]
+                        : Colors.grey[700];
+
+                    return [
+                      PopupMenuItem<String>(
+                        value: 'Share',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.share_outlined,
+                              color: isDark
+                                  ? Colors.blue[300]
+                                  : Colors.blueAccent,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Share PDF',
+                              style: TextStyle(fontSize: 16, color: textColor),
+                            ),
+                          ],
                         ),
-                        const PopupMenuItem<String>(
-                          value: 'Rotate',
-                          child: Text('Rotate'),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'Rotate',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.rotate_90_degrees_ccw,
+                              color: isDark
+                                  ? Colors.orange[300]
+                                  : Colors.orangeAccent,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Rotate Pages',
+                              style: TextStyle(fontSize: 16, color: textColor),
+                            ),
+                          ],
                         ),
-                        const PopupMenuItem<String>(
-                          value: 'Metadata',
-                          child: Text('Metadata'),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'Bookmarks',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.bookmark,
+                              color: isDark
+                                  ? Colors.pink[300]
+                                  : Colors.pinkAccent,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'View Bookmarks',
+                              style: TextStyle(fontSize: 16, color: textColor),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
+                      const PopupMenuDivider(),
+                      PopupMenuItem<String>(
+                        enabled: false,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: secondaryColor,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'PDF Reader v1.0',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: secondaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ];
+                  },
                 ),
               ],
             ),

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -46,13 +49,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _prefs.setBool('showLastOpenedDate', value);
   }
 
-  void _clearCache() {
-    // In a real app, you would clear cached files here.
-    // For this example, we'll just show a snackbar.
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Cache cleared!')));
+  void _clearCache(BuildContext context) async {
+  try {
+    final tempDir = await getTemporaryDirectory();
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
+    }
+
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final cacheDir = Directory('${appDocDir.path}/cache');
+    if (cacheDir.existsSync()) {
+      cacheDir.deleteSync(recursive: true);
+    }
+
+    // Clear SharedPreferences
+    await _prefs.clear();
+
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Cache cleared successfully!')),
+    );
+
+    // Return to HomeScreen and indicate that cache was cleared
+    Navigator.pop(context, true);
+
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to clear cache: $e')),
+    );
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             title: const Text('Clear Cache'),
             trailing: const Icon(Icons.delete),
-            onTap: _clearCache,
+            onTap: () => _clearCache(context),
           ),
         ],
       ),

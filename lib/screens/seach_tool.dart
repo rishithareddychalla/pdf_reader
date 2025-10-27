@@ -53,16 +53,26 @@ class SearchToolbarState extends State<SearchToolbar> {
   }
 
   void _showSearchAlertDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          insetPadding: const EdgeInsets.all(0),
-          title: const Text('Search Result'),
-          content: const SizedBox(
-              width: 328.0,
-              child: Text(
-                  'No more occurrences found. Would you like to continue to search from the beginning?')),
+          backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          title: Text(
+            'Search Result',
+            style: TextStyle(color: isDark ? Colors.white : Colors.black),
+          ),
+          content: SizedBox(
+            width: 328.0,
+            child: Text(
+              'No more occurrences found. Would you like to continue searching from the beginning?',
+              style: TextStyle(
+                color: isDark ? Colors.grey[300] : Colors.grey[800],
+              ),
+            ),
+          ),
           actions: <Widget>[
             TextButton(
               onPressed: () {
@@ -73,7 +83,9 @@ class SearchToolbarState extends State<SearchToolbar> {
               },
               child: Text(
                 'YES',
-                style: Theme.of(context).textTheme.labelLarge,
+                style: TextStyle(
+                  color: isDark ? Colors.blue[300] : Colors.blueAccent,
+                ),
               ),
             ),
             TextButton(
@@ -88,7 +100,9 @@ class SearchToolbarState extends State<SearchToolbar> {
               },
               child: Text(
                 'NO',
-                style: Theme.of(context).textTheme.labelLarge,
+                style: TextStyle(
+                  color: isDark ? Colors.blue[300] : Colors.blueAccent,
+                ),
               ),
             ),
           ],
@@ -99,16 +113,22 @@ class SearchToolbarState extends State<SearchToolbar> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Material(
-          color: Colors.transparent,
-          child: IconButton(
-            icon: Icon(
-              Icons.arrow_back,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
-              size: 24,
-            ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final backgroundColor = isDark
+        ? const Color(0xFF1E1E1E)
+        : const Color(0xFFF9F9F9);
+    final iconColor = isDark ? Colors.white70 : Colors.black54;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final hintColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
+    return Container(
+      color: backgroundColor,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: <Widget>[
+          IconButton(
+            icon: Icon(Icons.arrow_back, color: iconColor, size: 24),
             onPressed: () {
               widget.onTap?.call(SearchToolbarAction.cancelSearch);
               _isSearchInitiated = false;
@@ -116,54 +136,38 @@ class SearchToolbarState extends State<SearchToolbar> {
               _pdfTextSearchResult.clear();
             },
           ),
-        ),
-        Flexible(
-          child: TextFormField(
-            style: Theme.of(context).textTheme.bodyMedium,
-            enableInteractiveSelection: false,
-            focusNode: focusNode,
-            keyboardType: TextInputType.text,
-            textInputAction: TextInputAction.search,
-            controller: _editingController,
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              hintText: 'Find...',
-              hintStyle: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Theme.of(context).hintColor),
-            ),
-            onChanged: (text) {
-              if (_editingController.text.isNotEmpty) {
-                setState(() {});
-              }
-            },
-            onFieldSubmitted: (String value) {
-              _isSearchInitiated = true;
-              _pdfTextSearchResult =
-                  widget.controller!.searchText(_editingController.text);
-              _pdfTextSearchResult.addListener(() {
-                if (super.mounted) {
-                  setState(() {});
-                }
-                if (!_pdfTextSearchResult.hasResult &&
-                    _pdfTextSearchResult.isSearchCompleted) {
-                  widget.onTap?.call(SearchToolbarAction.noResultFound);
-                }
-              });
-            },
-          ),
-        ),
-        Visibility(
-          visible: _editingController.text.isNotEmpty,
-          child: Material(
-            color: Colors.transparent,
-            child: IconButton(
-              icon: Icon(
-                Icons.clear,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
-                size: 24,
+          Expanded(
+            child: TextFormField(
+              style: TextStyle(color: textColor),
+              enableInteractiveSelection: false,
+              focusNode: focusNode,
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.search,
+              controller: _editingController,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: 'Find...',
+                hintStyle: TextStyle(color: hintColor),
               ),
+              onChanged: (text) => setState(() {}),
+              onFieldSubmitted: (String value) {
+                _isSearchInitiated = true;
+                _pdfTextSearchResult = widget.controller!.searchText(
+                  _editingController.text,
+                );
+                _pdfTextSearchResult.addListener(() {
+                  if (super.mounted) setState(() {});
+                  if (!_pdfTextSearchResult.hasResult &&
+                      _pdfTextSearchResult.isSearchCompleted) {
+                    widget.onTap?.call(SearchToolbarAction.noResultFound);
+                  }
+                });
+              },
+            ),
+          ),
+          if (_editingController.text.isNotEmpty)
+            IconButton(
+              icon: Icon(Icons.clear, color: iconColor, size: 22),
               onPressed: () {
                 setState(() {
                   _editingController.clear();
@@ -172,67 +176,43 @@ class SearchToolbarState extends State<SearchToolbar> {
                   _isSearchInitiated = false;
                   focusNode!.requestFocus();
                 });
-                widget.onTap!.call(SearchToolbarAction.clearText);
+                widget.onTap?.call(SearchToolbarAction.clearText);
               },
               tooltip: widget.showTooltip ? 'Clear Text' : null,
             ),
-          ),
-        ),
-        Visibility(
-          visible:
-              !_pdfTextSearchResult.isSearchCompleted && _isSearchInitiated,
-          child: Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: SizedBox(
+          if (!_pdfTextSearchResult.isSearchCompleted && _isSearchInitiated)
+            const SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(
-                color: Theme.of(context).primaryColor,
+              child: Padding(
+                padding: EdgeInsets.only(right: 10),
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-          ),
-        ),
-        Visibility(
-          visible: _pdfTextSearchResult.hasResult,
-          child: Row(
-            children: [
-              Text(
-                '${_pdfTextSearchResult.currentInstanceIndex}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Text(
-                ' of ',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Text(
-                '${_pdfTextSearchResult.totalInstanceCount}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Material(
-                color: Colors.transparent,
-                child: IconButton(
-                  icon: Icon(
-                    Icons.navigate_before,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
-                    size: 24,
-                  ),
+          if (_pdfTextSearchResult.hasResult)
+            Row(
+              children: [
+                Text(
+                  '${_pdfTextSearchResult.currentInstanceIndex}',
+                  style: TextStyle(color: textColor),
+                ),
+                Text(' of ', style: TextStyle(color: textColor)),
+                Text(
+                  '${_pdfTextSearchResult.totalInstanceCount}',
+                  style: TextStyle(color: textColor),
+                ),
+                IconButton(
+                  icon: Icon(Icons.navigate_before, color: iconColor, size: 24),
                   onPressed: () {
                     setState(() {
                       _pdfTextSearchResult.previousInstance();
                     });
-                    widget.onTap!.call(SearchToolbarAction.previousInstance);
+                    widget.onTap?.call(SearchToolbarAction.previousInstance);
                   },
                   tooltip: widget.showTooltip ? 'Previous' : null,
                 ),
-              ),
-              Material(
-                color: Colors.transparent,
-                child: IconButton(
-                  icon: Icon(
-                    Icons.navigate_next,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
-                    size: 24,
-                  ),
+                IconButton(
+                  icon: Icon(Icons.navigate_next, color: iconColor, size: 24),
                   onPressed: () {
                     setState(() {
                       if (_pdfTextSearchResult.currentInstanceIndex ==
@@ -246,15 +226,14 @@ class SearchToolbarState extends State<SearchToolbar> {
                         _pdfTextSearchResult.nextInstance();
                       }
                     });
-                    widget.onTap!.call(SearchToolbarAction.nextInstance);
+                    widget.onTap?.call(SearchToolbarAction.nextInstance);
                   },
                   tooltip: widget.showTooltip ? 'Next' : null,
                 ),
-              ),
-            ],
-          ),
-        ),
-      ],
+              ],
+            ),
+        ],
+      ),
     );
   }
 }

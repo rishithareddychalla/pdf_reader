@@ -44,10 +44,10 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _showLastOpenedDate = _prefs.getBool('showLastOpenedDate') ?? true;
     });
-    
+
     // **LOAD RECENT FILES FROM PERSISTENT STORAGE**
     await _loadRecentFiles();
-    
+
     // Load metadata for all recent files
     for (final file in _recentFiles) {
       await _loadPdfMetadata(file);
@@ -70,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
             .where((file) => file.existsSync()) // Only keep existing files
             .toList();
       });
-      
+
       // Remove invalid paths from storage
       final validPaths = _recentFiles.map((f) => f.path).toList();
       if (validPaths.length != savedPaths.length) {
@@ -83,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _updateLastOpenedDate(String filePath) async {
     final now = DateTime.now().toIso8601String();
     await _prefs.setString('last_opened_date_${filePath.hashCode}', now);
-    
+
     // Update metadata
     setState(() {
       if (_pdfMetadata.containsKey(filePath)) {
@@ -99,14 +99,14 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final controller = _pdfControllers.putIfAbsent(
         file.path,
-        () => PdfController(
-          document: PdfDocument.openFile(file.path),
-        ),
+        () => PdfController(document: PdfDocument.openFile(file.path)),
       );
 
       final doc = await controller.document;
       pageCount = doc.pagesCount;
-      lastOpenedDate = _prefs.getString('last_opened_date_${file.path.hashCode}');
+      lastOpenedDate = _prefs.getString(
+        'last_opened_date_${file.path.hashCode}',
+      );
     } catch (e) {
       pageCount = 0;
       lastOpenedDate = null;
@@ -156,7 +156,9 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           } else {
             // Move to top if already exists
-            final existingIndex = _recentFiles.indexWhere((p) => p.path == file.path);
+            final existingIndex = _recentFiles.indexWhere(
+              (p) => p.path == file.path,
+            );
             if (existingIndex > 0) {
               setState(() {
                 final movedFile = _recentFiles.removeAt(existingIndex);
@@ -186,7 +188,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error picking PDF: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error picking PDF: $e')));
       }
     } finally {
       if (mounted) {
@@ -205,13 +209,22 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
+            onPressed: () async {
+              final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (context) =>
-                        SettingsScreen(toggleTheme: widget.toggleTheme)),
+                  builder: (context) =>
+                      SettingsScreen(toggleTheme: widget.toggleTheme),
+                ),
               );
+
+              // If cache was cleared, reload data immediately
+              if (result == true) {
+                setState(() {
+                  _recentFiles.clear();
+                  _pdfMetadata.clear();
+                });
+              }
             },
           ),
         ],
@@ -223,9 +236,10 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 const Padding(
                   padding: EdgeInsets.all(16.0),
-                  child: Text("Recent Files",
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    "Recent Files",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 Expanded(
                   child: _recentFiles.isEmpty
@@ -234,7 +248,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           itemCount: _recentFiles.length,
                           itemBuilder: (context, index) {
                             final file = _recentFiles[index];
-                            final metadata = _pdfMetadata[file.path] ??
+                            final metadata =
+                                _pdfMetadata[file.path] ??
                                 {'pageCount': 0, 'lastOpenedDate': null};
                             final pageCount = metadata['pageCount'];
                             final lastOpenedDate = metadata['lastOpenedDate'];
@@ -242,29 +257,50 @@ class _HomeScreenState extends State<HomeScreen> {
 
                             return Card(
                               margin: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
                               child: ListTile(
                                 leading: pdfController != null
                                     ? SizedBox(
                                         width: 50,
                                         height: 50,
                                         child: FutureBuilder<PdfPageImage?>(
-                                          future: pdfController.document.then((doc) => doc.getPage(1).then((page) => page.render(width: 100.0, height: 100.0))),
+                                          future: pdfController.document.then(
+                                            (doc) => doc
+                                                .getPage(1)
+                                                .then(
+                                                  (page) => page.render(
+                                                    width: 100.0,
+                                                    height: 100.0,
+                                                  ),
+                                                ),
+                                          ),
                                           builder: (context, snapshot) {
-                                            if (snapshot.connectionState == ConnectionState.done &&
+                                            if (snapshot.connectionState ==
+                                                    ConnectionState.done &&
                                                 snapshot.hasData) {
-                                              return Image.memory(snapshot.data!.bytes);
+                                              return Image.memory(
+                                                snapshot.data!.bytes,
+                                              );
                                             } else {
-                                              return const Icon(Icons.picture_as_pdf, size: 40);
+                                              return const Icon(
+                                                Icons.picture_as_pdf,
+                                                size: 40,
+                                              );
                                             }
                                           },
                                         ),
                                       )
-                                    : const Icon(Icons.picture_as_pdf, size: 40),
+                                    : const Icon(
+                                        Icons.picture_as_pdf,
+                                        size: 40,
+                                      ),
                                 title: Text(
                                   file.path.split('/').last,
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.bold),
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -275,22 +311,25 @@ class _HomeScreenState extends State<HomeScreen> {
                                         lastOpenedDate != null) ...[
                                       const SizedBox(height: 2),
                                       Text(
-                                          "Last opened: ${DateFormat.yMd().add_jm().format(DateTime.parse(lastOpenedDate))}"),
-                                    ]
+                                        "Last opened: ${DateFormat.yMd().add_jm().format(DateTime.parse(lastOpenedDate))}",
+                                      ),
+                                    ],
                                   ],
                                 ),
                                 onTap: () async {
                                   // Update last opened date
                                   await _updateLastOpenedDate(file.path);
-                                  
+
                                   // Move to top of recent list
                                   setState(() {
                                     if (index > 0) {
-                                      final movedFile = _recentFiles.removeAt(index);
+                                      final movedFile = _recentFiles.removeAt(
+                                        index,
+                                      );
                                       _recentFiles.insert(0, movedFile);
                                     }
                                   });
-                                  
+
                                   // Save updated list
                                   await _saveRecentFiles();
 
@@ -301,7 +340,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           PDFReaderScreen(pdfPath: file.path),
                                     ),
                                   );
-                                  
+
                                   // Refresh metadata after returning from reader
                                   await _loadPdfMetadata(file);
                                 },

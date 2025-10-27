@@ -41,6 +41,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'PDF Reader App',
       theme: ThemeData(
         brightness: Brightness.light,
@@ -61,9 +62,7 @@ class _MyAppState extends State<MyApp> {
         ),
       ),
       themeMode: _themeMode,
-      home: HomeScreen(
-        toggleTheme: _toggleTheme,
-      ),
+      home: HomeScreen(toggleTheme: _toggleTheme),
     );
   }
 }
