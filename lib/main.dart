@@ -59,13 +59,32 @@ class _MyAppState extends State<MyApp> {
         );
   }
 
-  void _navigateToReaderScreen(receive_intent.Intent intent) {
-    //
+  void _navigateToReaderScreen(
+    receive_intent.Intent intent, {
+    bool saveToRecents = true,
+  }) {
     final path = intent.data;
     if (path != null) {
+      if (saveToRecents) {
+        _saveToRecentFiles(path);
+      }
       navigatorKey.currentState?.push(
-        MaterialPageRoute(builder: (context) => PDFReaderScreen()),
+        MaterialPageRoute(
+          builder: (context) => PDFReaderScreen(pdfPath: path),
+        ),
       );
+    }
+  }
+
+  Future<void> _saveToRecentFiles(String path) async {
+    _prefs = await SharedPreferences.getInstance();
+    final List<String> recentFiles = _prefs.getStringList('recent_files') ?? [];
+    if (!recentFiles.contains(path)) {
+      recentFiles.insert(0, path);
+      if (recentFiles.length > 10) {
+        recentFiles.removeLast();
+      }
+      await _prefs.setStringList('recent_files', recentFiles);
     }
   }
 
