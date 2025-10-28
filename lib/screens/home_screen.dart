@@ -1,6 +1,8 @@
+
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:pdf_reader/screens/pdf_reader_screen.dart';
@@ -23,6 +25,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = false;
   late SharedPreferences _prefs;
   bool _showLastOpenedDate = true;
+  
+  // Method channel for Android file handling
+  static const platform = MethodChannel('pdf_reader/file_handler');
 
   @override
   void initState() {
@@ -40,65 +45,106 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Initialize SharedPreferences and load recent files
   Future<void> _initPrefs() async {
-    _prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _showLastOpenedDate = _prefs.getBool('showLastOpenedDate') ?? true;
-    });
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _showLastOpenedDate = _prefs.getBool('showLastOpenedDate') ?? true;
+      });
 
-    // **LOAD RECENT FILES FROM PERSISTENT STORAGE**
-    await _loadRecentFiles();
+      // Load recent files from persistent storage
+      await _loadRecentFiles();
 
-    // Load metadata for all recent files
-    for (final file in _recentFiles) {
-      await _loadPdfMetadata(File(file['path']!));
+      // Load metadata for all recent files
+      for (final file in _recentFiles) {
+        final filePath = file['path'];
+        if (filePath != null && filePath.isNotEmpty) {
+          await _loadPdfMetadata(File(filePath));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error initializing preferences: $e');
     }
   }
 
   /// Save recent files list to SharedPreferences
   Future<void> _saveRecentFiles() async {
-    final recentFilesJson =
-        _recentFiles.map((file) => jsonEncode(file)).toList();
-    await _prefs.setStringList('recent_files', recentFilesJson);
+    try {
+      final recentFilesJson =
+          _recentFiles.map((file) => jsonEncode(file)).toList();
+      await _prefs.setStringList('recent_files', recentFilesJson);
+    } catch (e) {
+      debugPrint('Error saving recent files: $e');
+    }
   }
 
   /// Load recent files from SharedPreferences
   Future<void> _loadRecentFiles() async {
-    final List<String>? savedFilesJson =
-        _prefs.getStringList('recent_files');
-    if (savedFilesJson != null && savedFilesJson.isNotEmpty) {
-      final loadedFiles = savedFilesJson.map((json) {
-        final fileData = jsonDecode(json);
-        return {'path': fileData['path'], 'name': fileData['name']};
-      }).toList();
+    try {
+      final List<String>? savedFilesJson =
+          _prefs.getStringList('recent_files');
+      if (savedFilesJson != null && savedFilesJson.isNotEmpty) {
+        final loadedFiles = <Map<String, String>>[];
+        
+        for (final json in savedFilesJson) {
+          try {
+            final fileData = jsonDecode(json) as Map<String, dynamic>;
+            final path = fileData['path']?.toString();
+            final name = fileData['name']?.toString();
+            
+            if (path != null && name != null) {
+              loadedFiles.add({'path': path, 'name': name});
+            }
+          } catch (e) {
+            debugPrint('Error parsing file data: $e');
+            continue;
+          }
+        }
 
-      // Filter out files that no longer exist
-      final existingFiles = loadedFiles.where((fileData) {
-        final file = File(fileData['path']!);
-        return file.existsSync();
-      }).toList();
+        // Filter out files that no longer exist
+        final existingFiles = <Map<String, String>>[];
+        for (final fileData in loadedFiles) {
+          final filePath = fileData['path'];
+          if (filePath != null) {
+            final file = File(filePath);
+            if (file.existsSync()) {
+              existingFiles.add(fileData);
+            }
+          }
+        }
 
-      setState(() {
-        _recentFiles = existingFiles;
-      });
+        if (mounted) {
+          setState(() {
+            _recentFiles = existingFiles;
+          });
+        }
 
-      // If any files were removed, update SharedPreferences
-      if (existingFiles.length != loadedFiles.length) {
-        await _saveRecentFiles();
+        // If any files were removed, update SharedPreferences
+        if (existingFiles.length != loadedFiles.length) {
+          await _saveRecentFiles();
+        }
       }
+    } catch (e) {
+      debugPrint('Error loading recent files: $e');
     }
   }
 
   /// Update last opened date for a file
   Future<void> _updateLastOpenedDate(String filePath) async {
-    final now = DateTime.now().toIso8601String();
-    await _prefs.setString('last_opened_date_${filePath.hashCode}', now);
+    try {
+      final now = DateTime.now().toIso8601String();
+      await _prefs.setString('last_opened_date_${filePath.hashCode}', now);
 
-    // Update metadata
-    setState(() {
-      if (_pdfMetadata.containsKey(filePath)) {
-        _pdfMetadata[filePath]!['lastOpenedDate'] = now;
+      // Update metadata
+      if (mounted) {
+        setState(() {
+          if (_pdfMetadata.containsKey(filePath)) {
+            _pdfMetadata[filePath]!['lastOpenedDate'] = now;
+          }
+        });
       }
-    });
+    } catch (e) {
+      debugPrint('Error updating last opened date: $e');
+    }
   }
 
   Future<void> _loadPdfMetadata(File file) async {
@@ -117,13 +163,9 @@ class _HomeScreenState extends State<HomeScreen> {
         'last_opened_date_${file.path.hashCode}',
       );
     } catch (e) {
+      debugPrint('Error loading PDF metadata for ${file.path}: $e');
       pageCount = 0;
       lastOpenedDate = null;
-      // if (mounted) {
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     SnackBar(content: Text('Could not read metadata for ${file.path.split('/').last}')),
-      //   );
-      // }
       _pdfControllers.remove(file.path)?.dispose();
     }
 
@@ -136,6 +178,94 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  /// Handle content URI files (from external apps)
+  Future<void> _handleContentUri(String contentUri, String destinationDir) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      final result = await platform.invokeMethod('copyContentUri', {
+        'contentUri': contentUri,
+        'destinationPath': destinationDir,
+      }) as Map<String, dynamic>;
+
+      if (result['success'] == true) {
+        final fileName = result['fileName'] as String? ?? 'Unknown PDF';
+        final file = File(destinationDir);
+        
+        // Update last opened date immediately
+        await _updateLastOpenedDate(file.path);
+
+        // Load metadata
+        await _loadPdfMetadata(file);
+
+        // Update recent list and save
+        await _addToRecentFiles(file.path, fileName);
+
+        if (mounted) {
+          // Open reader screen
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PDFReaderScreen(
+                pdfPath: file.path,
+                pdfName: fileName,
+              ),
+            ),
+          );
+
+          // Update last opened date after reading
+          await _updateLastOpenedDate(file.path);
+        }
+      } else {
+        throw Exception('Failed to copy content URI file');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error handling file: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  /// Add file to recent files list
+  Future<void> _addToRecentFiles(String filePath, String fileName) async {
+    try {
+      if (mounted) {
+        setState(() {
+          final newFile = {
+            'path': filePath,
+            'name': fileName,
+          };
+          
+          // Remove if already exists
+          _recentFiles.removeWhere((f) => f['path'] == filePath);
+          
+          // Add to top
+          _recentFiles.insert(0, newFile);
+          
+          // Keep only last 10 files
+          if (_recentFiles.length > 10) {
+            _recentFiles = _recentFiles.take(10).toList();
+          }
+        });
+      }
+
+      // Save to persistent storage
+      await _saveRecentFiles();
+    } catch (e) {
+      debugPrint('Error adding to recent files: $e');
+    }
+  }
+
   Future<void> _pickPDF() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -145,6 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
+        final fileName = result.files.single.name;
 
         setState(() {
           _isLoading = true;
@@ -153,64 +284,110 @@ class _HomeScreenState extends State<HomeScreen> {
         // Update last opened date immediately
         await _updateLastOpenedDate(file.path);
 
-        // load metadata
+        // Load metadata
         await _loadPdfMetadata(file);
 
-        // **UPDATE RECENT LIST AND SAVE**
-        setState(() {
-          final newFile = {
-            'path': file.path,
-            'name': file.path.split('/').last,
-          };
-          if (!_recentFiles.any((f) => f['path'] == file.path)) {
-            _recentFiles.insert(0, newFile);
-            if (_recentFiles.length > 10) {
-              _recentFiles.removeLast();
-            }
-          } else {
-            // Move to top if already exists
-            final existingIndex = _recentFiles.indexWhere(
-              (f) => f['path'] == file.path,
-            );
-            if (existingIndex > 0) {
-              final movedFile = _recentFiles.removeAt(existingIndex);
-              _recentFiles.insert(0, movedFile);
-            }
-          }
-        });
-
-        // **SAVE TO PERSISTENT STORAGE**
-        await _saveRecentFiles();
+        // Update recent list and save
+        await _addToRecentFiles(file.path, fileName);
 
         setState(() {
           _isLoading = false;
         });
 
-        // open reader screen
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PDFReaderScreen(
-              pdfPath: file.path,
-              pdfName: file.path.split('/').last,
+        // Open reader screen
+        if (mounted) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PDFReaderScreen(
+                pdfPath: file.path,
+                pdfName: fileName,
+              ),
             ),
-          ),
-        );
+          );
 
-        // Update last opened date after reading
-        await _updateLastOpenedDate(file.path);
+          // Update last opened date after reading
+          await _updateLastOpenedDate(file.path);
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error picking PDF: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking PDF: $e')),
+        );
       }
     } finally {
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _openRecentFile(int index) async {
+    try {
+      final fileData = _recentFiles[index];
+      final filePath = fileData['path'];
+      final fileName = fileData['name'];
+      
+      if (filePath == null || fileName == null) {
+        throw Exception('Invalid file data');
+      }
+
+      // Check if file still exists
+      final file = File(filePath);
+      if (!file.existsSync()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('File no longer exists')),
+          );
+        }
+        
+        // Remove from recent files
+        setState(() {
+          _recentFiles.removeAt(index);
+        });
+        await _saveRecentFiles();
+        return;
+      }
+
+      // Update last opened date
+      await _updateLastOpenedDate(filePath);
+
+      // Move to top of recent list
+      if (mounted) {
+        setState(() {
+          if (index > 0) {
+            final movedFile = _recentFiles.removeAt(index);
+            _recentFiles.insert(0, movedFile);
+          }
+        });
+      }
+
+      // Save updated list
+      await _saveRecentFiles();
+
+      // Open PDF reader
+      if (mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PDFReaderScreen(
+              pdfPath: filePath,
+              pdfName: fileName,
+            ),
+          ),
+        );
+
+        // Refresh metadata after returning from reader
+        await _loadPdfMetadata(file);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening file: $e')),
+        );
       }
     }
   }
@@ -238,6 +415,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   _recentFiles.clear();
                   _pdfMetadata.clear();
                 });
+                
+                // Dispose all controllers
+                for (final controller in _pdfControllers.values) {
+                  controller.dispose();
+                }
+                _pdfControllers.clear();
               }
             },
           ),
@@ -262,12 +445,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           itemCount: _recentFiles.length,
                           itemBuilder: (context, index) {
                             final fileData = _recentFiles[index];
-                            final filePath = fileData['path']!;
-                            final fileName =
-                                fileData['name'] ?? filePath.split('/').last;
+                            final filePath = fileData['path'];
+                            final fileName = fileData['name'];
+                            
+                            if (filePath == null || fileName == null) {
+                              return const SizedBox.shrink();
+                            }
+                            
                             final metadata = _pdfMetadata[filePath] ??
                                 {'pageCount': 0, 'lastOpenedDate': null};
-                            final pageCount = metadata['pageCount'];
+                            final pageCount = metadata['pageCount'] ?? 0;
                             final lastOpenedDate = metadata['lastOpenedDate'];
                             final pdfController = _pdfControllers[filePath];
 
@@ -277,46 +464,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                 vertical: 8,
                               ),
                               child: ListTile(
-                                leading: pdfController != null
-                                    ? SizedBox(
-                                        width: 50,
-                                        height: 50,
-                                        child: FutureBuilder<PdfPageImage?>(
-                                          future: pdfController.document.then(
-                                            (doc) => doc
-                                                .getPage(1)
-                                                .then(
-                                                  (page) => page.render(
-                                                    width: 100.0,
-                                                    height: 100.0,
-                                                  ),
-                                                ),
-                                          ),
-                                          builder: (context, snapshot) {
-                                            if (snapshot.connectionState ==
-                                                    ConnectionState.done &&
-                                                snapshot.hasData) {
-                                              return Image.memory(
-                                                snapshot.data!.bytes,
-                                              );
-                                            } else {
-                                              return const Icon(
-                                                Icons.picture_as_pdf,
-                                                size: 40,
-                                              );
-                                            }
-                                          },
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.picture_as_pdf,
-                                        size: 40,
-                                      ),
+                                leading: _buildThumbnail(pdfController),
                                 title: Text(
                                   fileName,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -327,39 +482,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                         lastOpenedDate != null) ...[
                                       const SizedBox(height: 2),
                                       Text(
-                                        "Last opened: ${DateFormat.yMd().add_jm().format(DateTime.parse(lastOpenedDate))}",
+                                        "Last opened: ${_formatDate(lastOpenedDate)}",
                                       ),
                                     ],
                                   ],
                                 ),
-                                onTap: () async {
-                                  // Update last opened date
-                                  await _updateLastOpenedDate(filePath);
-
-                                  // Move to top of recent list
-                                  setState(() {
-                                    if (index > 0) {
-                                      final movedFile = _recentFiles.removeAt(
-                                        index,
-                                      );
-                                      _recentFiles.insert(0, movedFile);
-                                    }
-                                  });
-
-                                  // Save updated list
-                                  await _saveRecentFiles();
-
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          PDFReaderScreen(pdfPath: filePath),
-                                    ),
-                                  );
-
-                                  // Refresh metadata after returning from reader
-                                  await _loadPdfMetadata(File(filePath));
-                                },
+                                onTap: () => _openRecentFile(index),
                               ),
                             );
                           },
@@ -373,5 +501,51 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  Widget _buildThumbnail(PdfController? pdfController) {
+    return SizedBox(
+      width: 50,
+      height: 50,
+      child: pdfController != null
+          ? FutureBuilder<PdfPageImage?>(
+              future: pdfController.document.then(
+                (doc) => doc.getPage(1).then(
+                  (page) => page.render(
+                    width: 100.0,
+                    height: 100.0,
+                  ),
+                ),
+              ),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done &&
+                    snapshot.hasData &&
+                    snapshot.data != null) {
+                  return Image.memory(
+                    snapshot.data!.bytes,
+                    fit: BoxFit.cover,
+                  );
+                } else {
+                  return const Icon(
+                    Icons.picture_as_pdf,
+                    size: 40,
+                  );
+                }
+              },
+            )
+          : const Icon(
+              Icons.picture_as_pdf,
+              size: 40,
+            ),
+    );
+  }
+
+  String _formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return DateFormat.yMd().add_jm().format(date);
+    } catch (e) {
+      return 'Unknown';
+    }
   }
 }
