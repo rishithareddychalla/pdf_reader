@@ -17,7 +17,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<File> _recentFiles = [];
+  List<Map<String, String>> _recentFiles = [];
   Map<String, Map<String, dynamic>> _pdfMetadata = {};
   final Map<String, PdfController> _pdfControllers = {};
   bool _isLoading = false;
@@ -50,31 +50,40 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Load metadata for all recent files
     for (final file in _recentFiles) {
-      await _loadPdfMetadata(file);
+      await _loadPdfMetadata(File(file['path']!));
     }
   }
 
   /// Save recent files list to SharedPreferences
   Future<void> _saveRecentFiles() async {
-    final filePaths = _recentFiles.map((file) => file.path).toList();
-    await _prefs.setStringList('recent_files', filePaths);
+    final recentFilesJson =
+        _recentFiles.map((file) => jsonEncode(file)).toList();
+    await _prefs.setStringList('recent_files', recentFilesJson);
   }
 
   /// Load recent files from SharedPreferences
   Future<void> _loadRecentFiles() async {
-    final List<String>? savedPaths = _prefs.getStringList('recent_files');
-    if (savedPaths != null && savedPaths.isNotEmpty) {
+    final List<String>? savedFilesJson =
+        _prefs.getStringList('recent_files');
+    if (savedFilesJson != null && savedFilesJson.isNotEmpty) {
+      final loadedFiles = savedFilesJson.map((json) {
+        final fileData = jsonDecode(json);
+        return {'path': fileData['path'], 'name': fileData['name']};
+      }).toList();
+
+      // Filter out files that no longer exist
+      final existingFiles = loadedFiles.where((fileData) {
+        final file = File(fileData['path']!);
+        return file.existsSync();
+      }).toList();
+
       setState(() {
-        _recentFiles = savedPaths
-            .map((path) => File(path))
-            .where((file) => file.existsSync()) // Only keep existing files
-            .toList();
+        _recentFiles = existingFiles;
       });
 
-      // Remove invalid paths from storage
-      final validPaths = _recentFiles.map((f) => f.path).toList();
-      if (validPaths.length != savedPaths.length) {
-        await _prefs.setStringList('recent_files', validPaths);
+      // If any files were removed, update SharedPreferences
+      if (existingFiles.length != loadedFiles.length) {
+        await _saveRecentFiles();
       }
     }
   }
@@ -149,21 +158,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // **UPDATE RECENT LIST AND SAVE**
         setState(() {
-          if (!_recentFiles.any((p) => p.path == file.path)) {
-            _recentFiles.insert(0, file);
+          final newFile = {
+            'path': file.path,
+            'name': file.path.split('/').last,
+          };
+          if (!_recentFiles.any((f) => f['path'] == file.path)) {
+            _recentFiles.insert(0, newFile);
             if (_recentFiles.length > 10) {
               _recentFiles.removeLast();
             }
           } else {
             // Move to top if already exists
             final existingIndex = _recentFiles.indexWhere(
-              (p) => p.path == file.path,
+              (f) => f['path'] == file.path,
             );
             if (existingIndex > 0) {
-              setState(() {
-                final movedFile = _recentFiles.removeAt(existingIndex);
-                _recentFiles.insert(0, movedFile);
-              });
+              final movedFile = _recentFiles.removeAt(existingIndex);
+              _recentFiles.insert(0, movedFile);
             }
           }
         });
@@ -179,7 +190,10 @@ class _HomeScreenState extends State<HomeScreen> {
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => PDFReaderScreen(pdfPath: file.path),
+            builder: (context) => PDFReaderScreen(
+              pdfPath: file.path,
+              pdfName: file.path.split('/').last,
+            ),
           ),
         );
 
@@ -247,13 +261,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       : ListView.builder(
                           itemCount: _recentFiles.length,
                           itemBuilder: (context, index) {
-                            final file = _recentFiles[index];
-                            final metadata =
-                                _pdfMetadata[file.path] ??
+                            final fileData = _recentFiles[index];
+                            final filePath = fileData['path']!;
+                            final fileName =
+                                fileData['name'] ?? filePath.split('/').last;
+                            final metadata = _pdfMetadata[filePath] ??
                                 {'pageCount': 0, 'lastOpenedDate': null};
                             final pageCount = metadata['pageCount'];
                             final lastOpenedDate = metadata['lastOpenedDate'];
-                            final pdfController = _pdfControllers[file.path];
+                            final pdfController = _pdfControllers[filePath];
 
                             return Card(
                               margin: const EdgeInsets.symmetric(
@@ -297,7 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         size: 40,
                                       ),
                                 title: Text(
-                                  file.path.split('/').last,
+                                  fileName,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -318,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 onTap: () async {
                                   // Update last opened date
-                                  await _updateLastOpenedDate(file.path);
+                                  await _updateLastOpenedDate(filePath);
 
                                   // Move to top of recent list
                                   setState(() {
@@ -337,12 +353,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) =>
-                                          PDFReaderScreen(pdfPath: file.path),
+                                          PDFReaderScreen(pdfPath: filePath),
                                     ),
                                   );
 
                                   // Refresh metadata after returning from reader
-                                  await _loadPdfMetadata(file);
+                                  await _loadPdfMetadata(File(filePath));
                                 },
                               ),
                             );

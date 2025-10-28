@@ -2,6 +2,7 @@ package com.example.pdf_reader
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -30,6 +31,19 @@ class MainActivity : FlutterActivity() {
                         }
                     } else {
                         result.error("INVALID_ARGUMENTS", "Missing contentUri or destinationPath", null)
+                    }
+                }
+                "getFileNameFromContentUri" -> {
+                    val contentUri = call.argument<String>("contentUri")
+                    if (contentUri != null) {
+                        try {
+                            val fileName = getFileName(Uri.parse(contentUri))
+                            result.success(fileName)
+                        } catch (e: Exception) {
+                            result.error("GET_FILE_NAME_ERROR", "Failed to get file name: ${e.message}", null)
+                        }
+                    } else {
+                        result.error("INVALID_ARGUMENTS", "Missing contentUri", null)
                     }
                 }
                 else -> {
@@ -64,5 +78,29 @@ class MainActivity : FlutterActivity() {
             e.printStackTrace()
             false
         }
+    }
+
+    private fun getFileName(uri: Uri): String? {
+        var result: String? = null
+        if (uri.scheme == "content") {
+            val cursor = contentResolver.query(uri, null, null, null, null)
+            try {
+                if (cursor != null && cursor.moveToFirst()) {
+                    result = cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
+                }
+            } finally {
+                cursor?.close()
+            }
+        }
+        if (result == null) {
+            result = uri.path
+            val cut = result?.lastIndexOf('/')
+            if (cut != -1) {
+                if (cut != null) {
+                    result = result?.substring(cut + 1)
+                }
+            }
+        }
+        return result
     }
 }
