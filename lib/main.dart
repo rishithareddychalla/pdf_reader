@@ -46,16 +46,17 @@ class _MyAppState extends State<MyApp> {
     }
 
     // Handle intents received while the app is running
-    _intentSubscription = receive_intent.ReceiveIntent.receivedIntentStream.listen(
-      (receive_intent.Intent? intent) {
-        if (intent != null) {
-          _navigateToReaderScreen(intent);
-        }
-      },
-      onError: (err) {
-        debugPrint('Error receiving intent: $err');
-      },
-    );
+    _intentSubscription = receive_intent.ReceiveIntent.receivedIntentStream
+        .listen(
+          (receive_intent.Intent? intent) {
+            if (intent != null) {
+              _navigateToReaderScreen(intent);
+            }
+          },
+          onError: (err) {
+            debugPrint('Error receiving intent: $err');
+          },
+        );
   }
 
   void _navigateToReaderScreen(receive_intent.Intent intent) {
@@ -63,10 +64,7 @@ class _MyAppState extends State<MyApp> {
     final path = intent.data;
     if (path != null) {
       navigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (context) => PDFReaderScreen(
-          ),
-        ),
+        MaterialPageRoute(builder: (context) => PDFReaderScreen()),
       );
     }
   }
@@ -86,7 +84,6 @@ class _MyAppState extends State<MyApp> {
     _prefs.setBool('darkMode', isDark);
   }
 
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -95,22 +92,50 @@ class _MyAppState extends State<MyApp> {
       title: 'PDF Reader App',
       theme: ThemeData(
         brightness: Brightness.light,
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.grey[100],
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
+        colorScheme: ColorScheme.light(
+          primary: const Color(0xFF5C6BC0), // soft indigo-blue
+          secondary: const Color(0xFF90CAF9), // light sky blue
+          surface: const Color(0xFFF8FAFC), // near-white background
+          onSurface: Colors.black87,
         ),
+        scaffoldBackgroundColor: const Color(0xFFF2F5F9),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF5C6BC0),
+          foregroundColor: Colors.white,
+          elevation: 2,
+        ),
+        cardColor: Colors.white,
+        shadowColor: Colors.black12,
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(fontSize: 16, color: Colors.black87),
+          bodyMedium: TextStyle(fontSize: 14, color: Colors.black87),
+        ),
+        useMaterial3: true,
       ),
+
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.grey[850],
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.blue[900],
-          foregroundColor: Colors.white,
+        colorScheme: ColorScheme.dark(
+          primary: const Color(0xFF7986CB), // soft indigo
+          secondary: const Color(0xFF64B5F6), // calm blue
+          surface: const Color(0xFF121212), // dark surface
+          onSurface: Colors.white70,
         ),
+        scaffoldBackgroundColor: const Color(0xFF0E1117),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1E2742),
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        cardColor: const Color(0xFF1C1F26),
+        shadowColor: Colors.black54,
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(fontSize: 16, color: Colors.white70),
+          bodyMedium: TextStyle(fontSize: 14, color: Colors.white70),
+        ),
+        useMaterial3: true,
       ),
+
       themeMode: _themeMode,
       home: HomeScreen(toggleTheme: _toggleTheme),
     );

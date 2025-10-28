@@ -84,7 +84,9 @@ class SearchToolbarState extends State<SearchToolbar> {
               child: Text(
                 'YES',
                 style: TextStyle(
-                  color: isDark ? Colors.blue[300] : Colors.blueAccent,
+                  color: isDark
+                      ? const Color(0xFF7986CB)
+                      : const Color(0xFF5C6BC0),
                 ),
               ),
             ),
@@ -101,7 +103,9 @@ class SearchToolbarState extends State<SearchToolbar> {
               child: Text(
                 'NO',
                 style: TextStyle(
-                  color: isDark ? Colors.blue[300] : Colors.blueAccent,
+                  color: isDark
+                      ? const Color(0xFF7986CB)
+                      : const Color(0xFF5C6BC0),
                 ),
               ),
             ),
