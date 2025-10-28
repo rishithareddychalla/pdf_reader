@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -69,17 +70,24 @@ class _MyAppState extends State<MyApp> {
     final path = intent.data;
     if (path != null) {
       String realPath = path;
+      String? originalFileName;
 
       // Convert content:// URIs to real files
       if (path.startsWith("content://")) {
         try {
+          // Extract the original filename from the content URI
+          final platform = const MethodChannel('pdf_reader/file_handler');
+          originalFileName =
+              await platform.invokeMethod('getFileNameFromContentUri', {
+            'contentUri': path,
+          });
+
           final tempDir = await getTemporaryDirectory();
           final fileName =
               'shared_document_${DateTime.now().millisecondsSinceEpoch}.pdf';
           final tempFile = File('${tempDir.path}/$fileName');
 
           // Use platform channel to copy content URI to temp file
-          final platform = const MethodChannel('pdf_reader/file_handler');
           final result = await platform.invokeMethod('copyContentUri', {
             'contentUri': path,
             'destinationPath': tempFile.path,
@@ -98,26 +106,41 @@ class _MyAppState extends State<MyApp> {
       }
 
       if (saveToRecents) {
-        _saveToRecentFiles(realPath);
+        _saveToRecentFiles(
+          realPath,
+          originalFileName,
+        );
       }
 
       navigatorKey.currentState?.push(
         MaterialPageRoute(
-          builder: (context) => PDFReaderScreen(pdfPath: realPath),
+          builder: (context) => PDFReaderScreen(
+            pdfPath: realPath,
+            pdfName: originalFileName,
+          ),
         ),
       );
     }
   }
 
-  Future<void> _saveToRecentFiles(String path) async {
+  Future<void> _saveToRecentFiles(String path, String? name) async {
     _prefs = await SharedPreferences.getInstance();
-    final List<String> recentFiles = _prefs.getStringList('recent_files') ?? [];
-    if (!recentFiles.contains(path)) {
-      recentFiles.insert(0, path);
+    final List<String> recentFilesJson =
+        _prefs.getStringList('recent_files') ?? [];
+    final recentFiles = recentFilesJson.map((e) => jsonDecode(e)).toList();
+
+    if (!recentFiles.any((file) => file['path'] == path)) {
+      recentFiles.insert(0, {
+        'path': path,
+        'name': name ?? path.split('/').last,
+      });
       if (recentFiles.length > 10) {
         recentFiles.removeLast();
       }
-      await _prefs.setStringList('recent_files', recentFiles);
+      await _prefs.setStringList(
+        'recent_files',
+        recentFiles.map((e) => jsonEncode(e)).toList(),
+      );
     }
   }
 

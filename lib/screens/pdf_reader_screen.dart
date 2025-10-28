@@ -11,8 +11,13 @@ import 'dart:typed_data';
 
 class PDFReaderScreen extends StatefulWidget {
   final String? pdfPath;
+  final String? pdfName;
 
-  const PDFReaderScreen({super.key, this.pdfPath});
+  const PDFReaderScreen({
+    super.key,
+    this.pdfPath,
+    this.pdfName,
+  });
 
   @override
   _PDFReaderScreenState createState() => _PDFReaderScreenState();
@@ -283,7 +288,8 @@ class _PDFReaderScreenState extends State<PDFReaderScreen> {
               backgroundColor: const Color(0xFFFAFAFA),
             )
           : AppBar(
-              title: Text(_pdfFile?.path.split('/').last ?? "PDF Reader"),
+              title: Text(widget.pdfName ??
+                  (_pdfFile?.path.split('/').last ?? "PDF Reader")),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.search),
