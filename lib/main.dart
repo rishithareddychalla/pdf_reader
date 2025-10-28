@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf_reader/screens/home_screen.dart';
 import 'package:pdf_reader/screens/pdf_reader_screen.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'package:receive_intent/receive_intent.dart' as receive_intent;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -59,18 +62,48 @@ class _MyAppState extends State<MyApp> {
         );
   }
 
-  void _navigateToReaderScreen(
+  Future<void> _navigateToReaderScreen(
     receive_intent.Intent intent, {
     bool saveToRecents = true,
-  }) {
+  }) async {
     final path = intent.data;
     if (path != null) {
-      if (saveToRecents) {
-        _saveToRecentFiles(path);
+      String realPath = path;
+
+      // Convert content:// URIs to real files
+      if (path.startsWith("content://")) {
+        try {
+          final tempDir = await getTemporaryDirectory();
+          final fileName =
+              'shared_document_${DateTime.now().millisecondsSinceEpoch}.pdf';
+          final tempFile = File('${tempDir.path}/$fileName');
+
+          // Use platform channel to copy content URI to temp file
+          final platform = const MethodChannel('pdf_reader/file_handler');
+          final result = await platform.invokeMethod('copyContentUri', {
+            'contentUri': path,
+            'destinationPath': tempFile.path,
+          });
+
+          if (result == true && await tempFile.exists()) {
+            realPath = tempFile.path;
+          } else {
+            debugPrint("Failed to copy file from content URI.");
+            return;
+          }
+        } catch (e) {
+          debugPrint("Error handling content URI: $e");
+          return;
+        }
       }
+
+      if (saveToRecents) {
+        _saveToRecentFiles(realPath);
+      }
+
       navigatorKey.currentState?.push(
         MaterialPageRoute(
-          builder: (context) => PDFReaderScreen(pdfPath: path),
+          builder: (context) => PDFReaderScreen(pdfPath: realPath),
         ),
       );
     }
