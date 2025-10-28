@@ -205,7 +205,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PDF Reader'),
+        title: Image.asset(
+          'assets/images/image.png',
+          height: 40,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
